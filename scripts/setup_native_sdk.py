@@ -10,8 +10,11 @@ Cross-platform development setup for Agora-Python-SDK (from source).
   - Windows: downloads the v3.1.2 Windows native SDK, copies agora_rtc_sdk.dll and
     agora_rtc_sdk.lib (x86_64) to the repo root, creates .venv, builds in place.
 
-  - Linux: this repository's setup.py does not define a Linux native link line.
-    The script exits with instructions; building here requires upstream/port work.
+  - Linux: downloads Agora's Linux RTC SDK zip from download.agora.io (unversioned
+    "FULL" package; override with AGORA_LINUX_SDK_URL), copies the x86_64 or
+    arm64-v8a .so set into the repo root, then builds like macOS/Windows. The CDN
+    does not mirror Mac/Windows-style v3_1_2 Linux zips; native ABI may differ
+    slightly from the pinned 3.1.2 bindings—report issues if symbols mismatch.
 
 Usage (from repository root):
 
@@ -42,6 +45,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 SDK_MAC_URL = "https://download.agora.io/sdk/release/Agora_Native_SDK_for_Mac_v3_1_2_FULL.zip"
 SDK_WIN_URL = "https://download.agora.io/sdk/release/Agora_Native_SDK_for_Windows_v3_1_2_FULL.zip"
+# Agora does not publish Linux v3_1_2 at the same versioned URL pattern as Mac/Windows; this FULL bundle is used.
+SDK_LINUX_DEFAULT_URL = "https://download.agora.io/sdk/release/Agora_Native_SDK_for_Linux_FULL.zip"
 
 
 def _log(msg: str) -> None:
@@ -82,6 +87,69 @@ def _mac_framework_present() -> bool:
 
 def _win_libs_present() -> bool:
     return (REPO_ROOT / "agora_rtc_sdk.dll").is_file() and (REPO_ROOT / "agora_rtc_sdk.lib").is_file()
+
+
+def _linux_sdk_abi_dir() -> str:
+    machine = platform.machine().lower()
+    if machine in ("x86_64", "amd64"):
+        return "x86_64"
+    if machine in ("aarch64", "arm64"):
+        return "arm64-v8a"
+    raise SystemExit(
+        f"Unsupported Linux machine {platform.machine()!r}; "
+        "expected x86_64/amd64 or aarch64/arm64."
+    )
+
+
+def _linux_native_sdk_ready() -> bool:
+    return (REPO_ROOT / "libagora_rtc_sdk.so").is_file()
+
+
+def _remove_linux_native_libs() -> None:
+    for p in REPO_ROOT.glob("libagora*.so"):
+        if p.is_file():
+            p.unlink()
+    aosl = REPO_ROOT / "libaosl.so"
+    if aosl.is_file():
+        aosl.unlink()
+
+
+def _setup_linux(force: bool) -> None:
+    abi = _linux_sdk_abi_dir()
+    if not force and _linux_native_sdk_ready():
+        _log("Linux native libs already in repo root (--force to re-download).")
+        return
+
+    url = os.environ.get("AGORA_LINUX_SDK_URL", SDK_LINUX_DEFAULT_URL)
+    if force or _linux_native_sdk_ready():
+        _remove_linux_native_libs()
+
+    with tempfile.TemporaryDirectory() as td:
+        tdir = Path(td)
+        zpath = tdir / "sdk.zip"
+        _download(url, zpath)
+        extract_root = tdir / "extracted"
+        extract_root.mkdir()
+        _extract_zip(zpath, extract_root)
+        libdirs = [
+            p.parent
+            for p in extract_root.rglob("libagora_rtc_sdk.so")
+            if p.parent.name == abi and "__MACOSX" not in p.parts
+        ]
+        if not libdirs:
+            raise SystemExit(
+                f"Could not find rtc/sdk/{abi}/libagora_rtc_sdk.so in the Linux SDK archive.\n"
+                f"URL: {url}"
+            )
+        src_dir = libdirs[0]
+        n = 0
+        for so in sorted(src_dir.glob("*.so")):
+            if so.is_file():
+                shutil.copy2(so, REPO_ROOT / so.name)
+                n += 1
+        if not n:
+            raise SystemExit(f"No *.so files under {src_dir}")
+    _log(f"Installed {n} shared libraries ({abi}) into repo root.")
 
 
 def _setup_mac(force: bool) -> None:
@@ -201,18 +269,12 @@ def main() -> int:
     os.chdir(REPO_ROOT)
     system = platform.system()
 
-    if system == "Linux":
-        _log(
-            "Linux is not supported by this repository's setup.py (only Darwin and Windows link rules exist).\n"
-            "Options: build on macOS or Windows; use WSL with a Windows-side build; or extend setup.py to link\n"
-            "Agora's Linux RTC shared libraries (advanced). See docs/SETUP_CROSS_PLATFORM.md"
-        )
-        return 2
-
     if system == "Darwin":
         _setup_mac(args.force)
     elif system == "Windows":
         _setup_windows(args.force)
+    elif system == "Linux":
+        _setup_linux(args.force)
     else:
         _log(f"Unsupported OS: {system}")
         return 2

@@ -56,6 +56,14 @@ def _download(url: str, dest: Path) -> None:
 
 
 def _extract_zip(zip_path: Path, dest_dir: Path) -> None:
+    # zipfile.extractall does not recreate macOS framework symlinks (writes link targets as
+    # plain files), which breaks linking. ditto preserves symlinks when expanding zips.
+    if platform.system() == "Darwin":
+        subprocess.run(
+            ["ditto", "-x", "-k", "--noqtn", str(zip_path), str(dest_dir)],
+            check=True,
+        )
+        return
     with zipfile.ZipFile(zip_path, "r") as zf:
         zf.extractall(dest_dir)
 

@@ -35,7 +35,7 @@ The script creates **`.venv`**, drops the correct **native libraries** in the re
 | **macOS (Intel)** | Yes | Use Xcode / CLT; framework is x86_64 in the official v3.1.2 FULL zip. |
 | **macOS (Apple Silicon)** | Yes | Native framework from the same zip is **Intel-only**. The setup script sets `ARCHFLAGS=-arch x86_64` for the extension. Run apps with **`arch -x86_64 .venv/bin/python ...`** so the interpreter matches the `.so`. |
 | **Windows 64-bit** | Yes | Visual Studio Build Tools with C++; copies `agora_rtc_sdk.dll` / `.lib` from `x86_64` inside the zip. |
-| **Linux (x86_64 / arm64)** | Yes | Uses **`Agora_Native_SDK_for_Linux_FULL.zip`** (CDN); not the same v3_1_2 filename as Mac/Windows. Set **`AGORA_LINUX_SDK_URL`** to pin another archive if required. |
+| **Linux** | **No** (by design of upstream `setup.py`) | `setup.py` only defines link rules for **Darwin** and **Windows**. The setup script prints an explanation and exits. Real Linux support would require new `Extension` flags and Agora’s Linux RTC `.so` layout. |
 
 ---
 
@@ -55,8 +55,7 @@ The script creates **`.venv`**, drops the correct **native libraries** in the re
 
 ### Linux
 
-- **g++** and **Python 3** headers (`python3-dev` on Debian/Ubuntu).
-- Network access to `download.agora.io` (or your **`AGORA_LINUX_SDK_URL`** override) for the first run.
+- Use a **macOS or Windows** machine or VM to build this fork, or extend `setup.py` yourself for Linux.
 
 ---
 
@@ -81,17 +80,12 @@ Note: the README typo “AograRtcEngineKit” should read **`AgoraRtcKit.framewo
 3. `python -m venv .venv`
 4. `.venv\Scripts\python setup.py build_ext --inplace`
 
-### Linux
-
-1. Download [Agora Native SDK for Linux FULL](https://download.agora.io/sdk/release/Agora_Native_SDK_for_Linux_FULL.zip) (or use **`AGORA_LINUX_SDK_URL`** with your own archive).
-2. From **`rtc/sdk/x86_64`** or **`rtc/sdk/arm64-v8a`** (match your CPU), copy every **`*.so`** into the **repo root** (next to `setup.py`).
-3. `python3 -m venv .venv`
-4. `.venv/bin/python setup.py build_ext --inplace`
+---
 
 ## PyPI (`pip install agora-python-sdk`) vs source build
 
 - **PyPI** ships **cp36–cp39** wheels for macOS x86_64 and Windows amd64 only. **Python 3.10+** often has **no matching wheel**, so `pip install agora-python-sdk` can fail with “no matching distribution”.
-- **Source build** (this repo) tracks your **installed Python version** but still depends on the **native** Mac framework, Windows DLLs, or Linux `.so` files in the repo root.
+- **Source build** (this repo) tracks your **installed Python version** but still depends on the **native** Mac framework or Windows DLLs.
 
 ---
 
@@ -120,7 +114,7 @@ See comments at the top of `channel_load_clients.py` for env variables and warni
 |--------|-------------------|
 | ImportError wrong architecture (arm64 vs x86_64) | Build and run under **Rosetta** on Apple Silicon, or use an Intel Mac. |
 | `dlopen` / missing framework | Run from repo root; ensure `AgoraRtcKit.framework` sits next to `_agorartc*.so`. |
-| `ImportError: libagora_…` / missing `.so` | Keep all RTC **`*.so`** from the SDK arch folder in the **repo root**; or set **`LD_LIBRARY_PATH`** to that directory. |
+| Windows link errors | MSVC C++ workload installed; `.dll` and `.lib` in repo root. |
 | 110 token errors | Certificate + token generation + uid/channel alignment. |
 | Too many processes | Lower `CLIENT_COUNT`; stagger `JOIN_STAGGER_MS`. |
 

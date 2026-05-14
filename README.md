@@ -3,9 +3,9 @@
 
 Use Agora RTC SDK with Python! 
 
-## Automated dev setup (macOS, Windows & Linux)
+## Automated dev setup (macOS & Windows)
 
-For a **one-command** download of the native RTC SDK, `.venv` creation, and `build_ext --inplace`:
+For a **one-command** download of the native v3.1.2 SDK, `.venv` creation, and `build_ext --inplace`:
 
 ```bash
 python3 scripts/setup_native_sdk.py
@@ -13,13 +13,13 @@ python3 scripts/setup_native_sdk.py
 
 On Windows (cmd): `python scripts\setup_native_sdk.py`, or run `setup.cmd` from the repo root.
 
-**Linux:** `setup.py` links against `libagora_rtc_sdk.so` and related `.so` files in the repo root. The script downloads Agora’s **Linux FULL** bundle from `download.agora.io` (there is no same CDN path as the Mac/Windows **v3_1_2** zips). Override the URL with **`AGORA_LINUX_SDK_URL`** if needed. Details: **[docs/SETUP_CROSS_PLATFORM.md](docs/SETUP_CROSS_PLATFORM.md)**.
+**Linux:** this repository’s `setup.py` only links **macOS** and **Windows**; the setup script explains and exits. See **[docs/SETUP_CROSS_PLATFORM.md](docs/SETUP_CROSS_PLATFORM.md)** for the full matrix, tokens, load testing, and **how to push to GitHub**.
 
 *NEWS: `AudioFrameObserver` has been supported since v3.1.2.10.*
 
 ## Prerequisites
 
-- Xcode (macOS) or **build-essential** / **g++** (Linux)
+- Xcode (macOS)
 - Visual Studio 2017+ with C++ (Windows)
 - Python 3.6+
 

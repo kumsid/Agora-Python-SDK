@@ -14,12 +14,6 @@ elif platform.system() == 'Windows':
     libraries = ['agora_rtc_sdk']
     library_dirs = ['.']
     extra_compile_args = ['/std:c++14', '-DNOMINMAX']
-elif platform.system() == 'Linux':
-    # Native libs (libagora_rtc_sdk.so and dependencies) live in the repo root; see scripts/setup_native_sdk.py
-    libraries = ['agora_rtc_sdk']
-    library_dirs = ['.']
-    extra_compile_args = ['-std=c++14']
-    extra_link_args = ['-Wl,-rpath,$ORIGIN']
 
 with open("publish_dscp.md", "r") as fh:
     long_description = fh.read()
@@ -61,7 +55,6 @@ setup (name = 'agora-python-sdk',
         "License :: OSI Approved :: MIT License",
         "Operating System :: MacOS",
         "Operating System :: Microsoft :: Windows",
-        "Operating System :: POSIX :: Linux",
         "Topic :: Scientific/Engineering",
         "Topic :: Software Development :: Libraries",
         "Topic :: Multimedia :: Video",

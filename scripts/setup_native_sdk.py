@@ -5,7 +5,8 @@ Cross-platform development setup for Agora-Python-SDK (from source).
   - macOS: downloads the v3.1.2 Mac native SDK, places AgoraRtcKit.framework in the
     repo root, creates .venv, runs build_ext --inplace. On Apple Silicon, builds
     the extension as x86_64 to match the official Intel-only framework (use Rosetta
-    to run Python, see docs).
+    to run Python, see docs). After creating .venv, verifies `arch -x86_64` can run
+    the venv Python (fails fast if it is arm64-only — use python.org universal2).
 
   - Windows: downloads the v3.1.2 Windows native SDK, copies agora_rtc_sdk.dll and
     agora_rtc_sdk.lib (x86_64) to the repo root, creates .venv, builds in place.
@@ -139,6 +140,57 @@ def _setup_windows(force: bool) -> None:
     _log(f"Installed: {REPO_ROOT / 'agora_rtc_sdk.dll'} and .lib")
 
 
+def _darwin_arm64() -> bool:
+    return platform.system() == "Darwin" and platform.machine() == "arm64"
+
+
+def _venv_python_runs_under_arch_x86_64(py: Path) -> bool:
+    """True if Rosetta can spawn this interpreter as x86_64 (required for the x86_64 Agora .so)."""
+    r = subprocess.run(
+        ["arch", "-x86_64", str(py), "-c", "pass"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    return r.returncode == 0
+
+
+def _exit_apple_silicon_venv_not_x86_capable(py: Path) -> None:
+    raise SystemExit(
+        f"""
+Apple Silicon + Agora macOS v3.1.2: your virtualenv Python cannot run under Rosetta as x86_64:
+
+  {py}
+
+`arch -x86_64 .venv/bin/python ...` only works if that binary includes an **x86_64** slice
+(universal2). Homebrew Pythons under /opt/homebrew are often **arm64-only**; `python -m venv`
+copies that, so everyone gets: "Bad CPU type in executable".
+
+Do this once (recommended: python.org “macOS 64-bit universal2 installer”):
+  1) Install from https://www.python.org/downloads/macos/
+  2) Use that interpreter’s full path (example for 3.11):
+       rm -rf .venv
+       /Library/Frameworks/Python.framework/Versions/3.11/bin/python3 -m venv .venv
+       /Library/Frameworks/Python.framework/Versions/3.11/bin/python3 scripts/setup_native_sdk.py
+
+Ensure Rosetta is installed (first line must print ok):
+  arch -x86_64 /usr/bin/true && echo ok || softwareupdate --install-rosetta
+
+Sanity check after recreating .venv:
+  file .venv/bin/python
+  # universal2: should list both x86_64 and arm64
+
+Or run scripts via: ./scripts/run_x86_venv.sh scripts/channel_load_clients.py
+
+To auto-recreate .venv with a detected universal2 Python (if installed):
+  ./scripts/fix_apple_silicon_venv.sh
+
+To auto-recreate .venv with a detected universal2 Python (if installed):
+  ./scripts/fix_apple_silicon_venv.sh
+""".lstrip()
+    )
+
+
 def _ensure_venv(skip_venv: bool) -> Path:
     """Return path to python executable to use for the build."""
     if skip_venv:
@@ -176,9 +228,19 @@ def _build(py: Path) -> None:
 
 
 def _smoke_import(py: Path) -> None:
-    if platform.system() == "Darwin" and platform.machine() == "arm64":
-        _log("Skipping import smoke test on arm64 (extension is x86_64); use: arch -x86_64 .venv/bin/python -c \"import agorartc\"")
+    if _darwin_arm64():
+        r = subprocess.run(
+            ["arch", "-x86_64", str(py), "-c", "import agorartc; print('import agorartc: OK')"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if r.returncode != 0:
+            _log(r.stderr or r.stdout or "import failed")
+            raise SystemExit("Smoke import failed (under arch -x86_64).")
+        _log(r.stdout.strip())
         return
+
     r = subprocess.run(
         [str(py), "-c", "import agorartc; print('import agorartc: OK')"],
         cwd=REPO_ROOT,
@@ -218,6 +280,9 @@ def main() -> int:
         return 2
 
     py = _ensure_venv(args.skip_venv)
+    if _darwin_arm64() and not _venv_python_runs_under_arch_x86_64(py):
+        _exit_apple_silicon_venv_not_x86_capable(py)
+
     if not args.skip_build:
         _build(py)
         try:
